@@ -12,6 +12,7 @@
     "@vercel/node": "^5.1.15",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "express-fileupload": "^1.5.1"
+    "express-fileupload": "^1.5.1",
+    "formidable": "^3.5.4"
   }
 }

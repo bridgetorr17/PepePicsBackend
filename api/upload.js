@@ -22,7 +22,11 @@ export default async function handler(req, res) {
         }
 
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        const name = fields.name[0];
+        const caption = fields.caption[0];
         console.log('Received file:', file);
+        console.log(name);
+        console.log(caption);
 
         try {
             //create stream for file

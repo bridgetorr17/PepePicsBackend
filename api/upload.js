@@ -1,6 +1,7 @@
 import formidable from 'formidable';
 import fs from 'fs';
 import { put } from '@vercel/blob';
+import { MongoClient } from 'mongodb';
 
 // Disable default body parser
 export const config = {
@@ -8,6 +9,14 @@ export const config = {
     bodyParser: false,
   },
 };
+
+const client = new MongoClient(process.env.MONGO_URI);
+const pictureData = {
+    "name": '',
+    "caption": '',
+    "url": ''
+}
+
 //serverless function handler
 export default async function handler(req, res) {
     if (req.method !== 'POST'){
@@ -22,11 +31,9 @@ export default async function handler(req, res) {
         }
 
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
-        const name = fields.name[0];
-        const caption = fields.caption[0];
+        pictureData['name'] = fields.name[0];
+        pictureData['caption'] = fields.caption[0];
         console.log('Received file:', file);
-        console.log(name);
-        console.log(caption);
 
         try {
             //create stream for file
@@ -40,9 +47,23 @@ export default async function handler(req, res) {
                 addRandomSuffix: true
             });
 
-            console.log(blob);
+            console.log(blob.url);
+            pictureData['url'] = blob.url;
         
-            res.status(200).json({ message: 'File uploaded and moved', path: blob });
+            try{
+                await client.connect();
+
+                let photosCollection = client.db('PepePics').collection('pictureData');
+                await photosCollection.insertOne(pictureData);
+                console.log('inserted photo data')
+            }
+            catch(error){
+                console.error(error);
+            }
+            finally{
+                await client.close();
+            }
+            res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
         } catch (moveErr) {
             console.error('Failed to move file:', moveErr);
             res.status(500).json({ error: 'Failed to move uploaded file' });

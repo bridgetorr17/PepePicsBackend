@@ -1,7 +1,9 @@
 import formidable from 'formidable';
-import fs from 'fs';
+import fs, { read } from 'fs';
 import { put } from '@vercel/blob';
 import { MongoClient } from 'mongodb';
+import sharp from 'sharp';
+import { PassThrough } from 'stream';
 
 // Disable default body parser
 export const config = {
@@ -40,25 +42,33 @@ export default async function handler(req, res) {
         }
 
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
-        pictureData['name'] = fields.name[0];
-        pictureData['caption'] = fields.caption[0];
-        console.log('Received file:', file);
 
-        try {
-            //create stream for file
-            const readStream = fs.createReadStream(file.filepath);
+        //resize image and send to blob
+        try{
+            const readableStream = fs.createReadStream(file.filepath);
 
+            const resize = sharp()
+                .rotate()
+                .resize(800)
+                .jpeg({ quality : 70 })
 
-            //transfer to vercel blob
-            const blob = await put(file.originalFilename, readStream, {
+            const optimizeStream = readableStream
+                .pipe(resize);
+
+            const pass = new PassThrough()
+            optimizeStream.pipe(pass);
+
+            const blob = await put(file.originalFilename, pass, {
                 access: 'public',
                 token: process.env.BLOB_READ_WRITE_TOKEN,
                 addRandomSuffix: true
             });
-
-            console.log(blob.url);
-            pictureData['url'] = blob.url;
         
+            pictureData['name'] = fields.name[0];
+            pictureData['caption'] = fields.caption[0];
+            pictureData['url'] = blob.url;
+            console.log('Received file:', file);
+            
             try{
                 await client.connect();
 
@@ -72,10 +82,12 @@ export default async function handler(req, res) {
             finally{
                 await client.close();
             }
+
             res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
-        } catch (moveErr) {
+        }
+        catch (moveErr) {
             console.error('Failed to move file:', moveErr);
-            res.status(500).json({ error: 'Failed to move uploaded file' });
+            res.status(500).json({ error: 'Image procesing or upload failed' });
         }
     });
 }

@@ -12,6 +12,7 @@
     "@vercel/node": "^5.1.15",
     "cors": "^2.8.5",
     "formidable": "^3.5.4",
-    "mongodb": "^6.16.0"
+    "mongodb": "^6.16.0",
+    "sharp": "^0.34.1"
   }
 }

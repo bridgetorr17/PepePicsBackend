@@ -20,7 +20,9 @@ export default async function handler(req, res){
         await client.connect();
 
         let photosCollection = client.db('PepePics').collection('pictureData');
-        let photoData = await photosCollection.find().toArray();
+        let photoData = await photosCollection.find()
+            .sort({_id: -1})
+            .toArray();
         res.status(200).json(photoData);
     }
     catch(error){

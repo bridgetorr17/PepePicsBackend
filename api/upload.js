@@ -5,6 +5,7 @@ import { MongoClient } from 'mongodb';
 import sharp from 'sharp';
 import { PassThrough } from 'stream';
 import moment from 'moment';
+import axios from 'axios';
 
 // Disable default body parser
 export const config = {
@@ -47,10 +48,10 @@ export default async function handler(req, res) {
 
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
-        //resize image and send to blob
         try{
             const readableStream = fs.createReadStream(file.filepath);
 
+            //resize image
             const resize = sharp()
                 .rotate()
                 .resize(800)
@@ -62,17 +63,35 @@ export default async function handler(req, res) {
             const pass = new PassThrough()
             optimizeStream.pipe(pass);
 
+            //upload image to blob
             const blob = await put(file.originalFilename, pass, {
                 access: 'public',
                 token: process.env.BLOB_READ_WRITE_TOKEN,
                 addRandomSuffix: true
             });
         
+            //test model if this is a cat
+            axios({
+                method: "POST",
+                url: "https://serverless.roboflow.com/cats-1dq9b/4",
+                params: {
+                    api_key: process.env.CAT_RECOGNITON_KEY,
+                    image: blob.url,
+                }
+            })
+            .then(function(response) {
+                console.log(response.data);
+            })
+            .catch(function(error) {
+                console.log(error);
+            });
+
             pictureData['name'] = fields.name[0];
             pictureData['caption'] = fields.caption[0];
             pictureData['url'] = blob.url;
             console.log('Received file:', file);
             
+            //upload photo and associated fields to mongodb
             try{
                 await client.connect();
 

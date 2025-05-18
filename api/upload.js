@@ -4,6 +4,7 @@ import { put } from '@vercel/blob';
 import { MongoClient } from 'mongodb';
 import sharp from 'sharp';
 import { PassThrough } from 'stream';
+import moment from 'moment';
 
 // Disable default body parser
 export const config = {
@@ -12,11 +13,14 @@ export const config = {
   },
 };
 
+console.log(moment().format("dddd, MMMM Do YYYY"))
+
 const client = new MongoClient(process.env.MONGO_URI);
 const pictureData = {
     "name": '',
     "caption": '',
-    "url": ''
+    "url": '',
+    "createdAt": moment().format("dddd, MMMM Do YYYY")
 }
 
 //serverless function handler

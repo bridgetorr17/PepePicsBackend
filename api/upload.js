@@ -71,42 +71,64 @@ export default async function handler(req, res) {
             });
         
             //test model if this is a cat
-            axios({
-                method: "POST",
-                url: "https://serverless.roboflow.com/cats-1dq9b/4",
-                params: {
-                    api_key: process.env.CAT_RECOGNITON_KEY,
-                    image: blob.url,
-                }
-            })
-            .then(function(response) {
-                console.log(response.data);
-            })
-            .catch(function(error) {
-                console.log(error);
-            });
-
-            pictureData['name'] = fields.name[0];
-            pictureData['caption'] = fields.caption[0];
-            pictureData['url'] = blob.url;
-            console.log('Received file:', file);
-            
-            //upload photo and associated fields to mongodb
+            let isCat = false;
             try{
-                await client.connect();
+                let response = await axios({
+                    method: "POST",
+                    url: "https://serverless.roboflow.com/cats-1dq9b/4",
+                    params: {
+                        api_key: process.env.CAT_RECOGNITON_KEY,
+                        image: blob.url,
+                    }
+                });
 
-                let photosCollection = client.db('PepePics').collection('pictureData');
-                await photosCollection.insertOne(pictureData);
-                console.log('inserted photo data')
+                const predictions = response.data.predictions;
+                console.log(predictions);
+
+                if(predictions.length === 0) isCat = true;
+                else{
+                    for (const item of predictions){
+                        if((item.class === 'cat' || item.class === 'pepe') && item.confidence > 0.5){
+                            isCat = true;
+                            console.log('this is a cat');
+                            break;
+                        }
+                    }
+                }
             }
-            catch(error){
-                console.error(error);
-            }
-            finally{
-                await client.close();
+            catch(err){
+                console.log(err);
             }
 
-            res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
+            if(isCat){
+                pictureData['name'] = fields.name[0];
+                pictureData['caption'] = fields.caption[0];
+                pictureData['url'] = blob.url;
+                console.log('Received file:', file);
+                
+                //upload photo and associated fields to mongodb
+                try{
+                    await client.connect();
+    
+                    let photosCollection = client.db('PepePics').collection('pictureData');
+                    await photosCollection.insertOne(pictureData);
+                    console.log('inserted photo data')
+                }
+                catch(error){
+                    console.error(error);
+                }
+                finally{
+                    await client.close();
+                }
+                
+                console.log('telling client we sent their cat')
+                res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
+            }
+
+            else{
+                console.log('not a cat');
+                res.status(406).json({ message: 'are you sure this is a cat?'})
+            }
         }
         catch (moveErr) {
             console.error('Failed to move file:', moveErr);

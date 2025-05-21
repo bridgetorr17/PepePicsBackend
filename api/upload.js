@@ -5,7 +5,7 @@ import { MongoClient } from 'mongodb';
 import sharp from 'sharp';
 import { PassThrough } from 'stream';
 import moment from 'moment';
-import axios, { all, formToJSON } from 'axios';
+import axios from 'axios';
 
 // Disable default body parser
 export const config = {

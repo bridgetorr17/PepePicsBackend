@@ -5,6 +5,7 @@ import { MongoClient } from 'mongodb';
 import sharp from 'sharp';
 import { PassThrough } from 'stream';
 import moment from 'moment';
+import axios from 'axios';
 
 // Disable default body parser
 export const config = {
@@ -47,10 +48,10 @@ export default async function handler(req, res) {
 
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
-        //resize image and send to blob
         try{
             const readableStream = fs.createReadStream(file.filepath);
 
+            //resize image
             const resize = sharp()
                 .rotate()
                 .resize(800)
@@ -62,32 +63,72 @@ export default async function handler(req, res) {
             const pass = new PassThrough()
             optimizeStream.pipe(pass);
 
+            //upload image to blob
             const blob = await put(file.originalFilename, pass, {
                 access: 'public',
                 token: process.env.BLOB_READ_WRITE_TOKEN,
                 addRandomSuffix: true
             });
         
-            pictureData['name'] = fields.name[0];
-            pictureData['caption'] = fields.caption[0];
-            pictureData['url'] = blob.url;
-            console.log('Received file:', file);
-            
+            //test model if this is a cat
+            let isCat = false;
             try{
-                await client.connect();
+                let response = await axios({
+                    method: "POST",
+                    url: "https://serverless.roboflow.com/cats-1dq9b/4",
+                    params: {
+                        api_key: process.env.CAT_RECOGNITON_KEY,
+                        image: blob.url,
+                    }
+                });
 
-                let photosCollection = client.db('PepePics').collection('pictureData');
-                await photosCollection.insertOne(pictureData);
-                console.log('inserted photo data')
+                const predictions = response.data.predictions;
+                console.log(predictions);
+
+                if(predictions.length === 0) isCat = true;
+                else{
+                    for (const item of predictions){
+                        if((item.class === 'cat' || item.class === 'pepe') && item.confidence > 0.5){
+                            isCat = true;
+                            console.log('this is a cat');
+                            break;
+                        }
+                    }
+                }
             }
-            catch(error){
-                console.error(error);
-            }
-            finally{
-                await client.close();
+            catch(err){
+                console.log(err);
             }
 
-            res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
+            if(isCat){
+                pictureData['name'] = fields.name[0];
+                pictureData['caption'] = fields.caption[0];
+                pictureData['url'] = blob.url;
+                console.log('Received file:', file);
+                
+                //upload photo and associated fields to mongodb
+                try{
+                    await client.connect();
+    
+                    let photosCollection = client.db('PepePics').collection('pictureData');
+                    await photosCollection.insertOne(pictureData);
+                    console.log('inserted photo data')
+                }
+                catch(error){
+                    console.error(error);
+                }
+                finally{
+                    await client.close();
+                }
+                
+                console.log('telling client we sent their cat')
+                res.status(200).json({ message: 'Thank you for your post! ', path: pictureData });
+            }
+
+            else{
+                console.log('not a cat');
+                res.status(406).json({ message: 'Are you sure this is a cat?'})
+            }
         }
         catch (moveErr) {
             console.error('Failed to move file:', moveErr);

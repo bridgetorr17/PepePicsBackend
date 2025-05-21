@@ -5,7 +5,7 @@ import { MongoClient } from 'mongodb';
 import sharp from 'sharp';
 import { PassThrough } from 'stream';
 import moment from 'moment';
-import axios, { all } from 'axios';
+import axios, { all, formToJSON } from 'axios';
 
 // Disable default body parser
 export const config = {
@@ -14,14 +14,22 @@ export const config = {
   },
 };
 
-console.log(moment().format("dddd, MMMM Do YYYY"))
-
 const client = new MongoClient(process.env.MONGO_URI);
 const pictureData = {
     "name": '',
     "caption": '',
     "url": '',
     "createdAt": moment().format("dddd, MMMM Do YYYY")
+}
+
+function parseForm(req){
+    return new Promise((resolve, reject) => {
+        const form = formidable({multiples: false});
+        form.parse(req, (err, fields, files) => {
+            if(err) return reject(err);
+            resolve ({fields, files})
+        })
+    });
 }
 
 //serverless function handler
@@ -50,102 +58,92 @@ export default async function handler(req, res) {
     }
 
     try{
-        const form = formidable({ multiples: false });
+        const {fields, files} = await parseForm(req);
 
-            form.parse(req, async (err, fields, files) => {
-                if (err || !files.file) {
-                    return res.status(400).json({ error: 'No file uploaded or parsing failed', details: err?.message });
-                }
+        if(!files.file){
+            return res.status(400).json({error: 'No file uploaded'});
+        }
 
-                const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        const readableStream = fs.createReadStream(file.filepath);
 
-                try{
-                    const readableStream = fs.createReadStream(file.filepath);
+        //resize image
+        const resize = sharp()
+            .rotate()
+            .resize(800)
+            .jpeg({ quality : 70 })
 
-                    //resize image
-                    const resize = sharp()
-                        .rotate()
-                        .resize(800)
-                        .jpeg({ quality : 70 })
+        const optimizeStream = readableStream
+            .pipe(resize);
 
-                    const optimizeStream = readableStream
-                        .pipe(resize);
+        const pass = new PassThrough()
+        optimizeStream.pipe(pass);
 
-                    const pass = new PassThrough()
-                    optimizeStream.pipe(pass);
-
-                    //upload image to blob
-                    const blob = await put(file.originalFilename, pass, {
-                        access: 'public',
-                        token: process.env.BLOB_READ_WRITE_TOKEN,
-                        addRandomSuffix: true
-                    });
+        //upload image to blob
+        const blob = await put(file.originalFilename, pass, {
+            access: 'public',
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+            addRandomSuffix: true
+        });
                 
-                    //test model if this is a cat
-                    let isCat = false;
-                    try{
-                        let response = await axios({
-                            method: "POST",
-                            url: "https://serverless.roboflow.com/cats-1dq9b/4",
-                            params: {
-                                api_key: process.env.CAT_RECOGNITON_KEY,
-                                image: blob.url,
-                            }
-                        });
-
-                        const predictions = response.data.predictions;
-                        console.log(predictions);
-
-                        if(predictions.length === 0) isCat = true;
-                        else{
-                            for (const item of predictions){
-                                if((item.class === 'cat' || item.class === 'pepe') && item.confidence > 0.5){
-                                    isCat = true;
-                                    console.log('this is a cat');
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    catch(err){
-                        console.log(err);
-                    }
-
-                    if(isCat){
-                        pictureData['name'] = fields.name[0];
-                        pictureData['caption'] = fields.caption[0];
-                        pictureData['url'] = blob.url;
-                        console.log('Received file:', file);
-                        
-                        //upload photo and associated fields to mongodb
-                        try{
-                            await client.connect();
-            
-                            let photosCollection = client.db('PepePics').collection('pictureData');
-                            await photosCollection.insertOne(pictureData);
-                            console.log('inserted photo data')
-                        }
-                        catch(error){
-                            console.error(error);
-                        }
-                        finally{
-                            await client.close();
-                        }
-                        
-                        console.log('telling client we sent their cat')
-                        res.status(200).json({ message: 'Thank you for your post! ', path: pictureData });
-                    }
-
-                    else{
-                        console.log('not a cat');
-                        res.status(406).json({ message: 'Are you sure this is a cat?'})
-                    }
-                }
-                catch (moveErr) {
-                    console.error('Failed to move file:', moveErr);
-                    res.status(500).json({ error: 'Image procesing or upload failed' });
+        //test model if this is a cat
+        let isCat = false;
+        try{
+            let response = await axios({
+                method: "POST",
+                url: "https://serverless.roboflow.com/cats-1dq9b/4",
+                params: {
+                    api_key: process.env.CAT_RECOGNITON_KEY,
+                    image: blob.url,
                 }
             });
+
+            const predictions = response.data.predictions;
+            console.log(predictions);
+
+            if(predictions.length === 0) isCat = true;
+            else{
+                for (const item of predictions){
+                    if((item.class === 'cat' || item.class === 'pepe') && item.confidence > 0.5){
+                        isCat = true;
+                        console.log('this is a cat');
+                        break;
+                    }
+                }
+            }
+        }
+        catch(err){
+            console.log(err);
+        }
+
+        if(isCat){
+            pictureData['name'] = fields.name[0];
+            pictureData['caption'] = fields.caption[0];
+            pictureData['url'] = blob.url;
+            console.log('Received file:', file);
+            
+            //upload photo and associated fields to mongodb
+            try{
+                await client.connect();
+
+                let photosCollection = client.db('PepePics').collection('pictureData');
+                await photosCollection.insertOne(pictureData);
+                console.log('inserted photo data')
+            }
+            catch(error){
+                console.error(error);
+            }
+            finally{
+                await client.close();
+            }
+                            
+            console.log('telling client we sent their cat')
+            res.status(200).json({ message: 'Thank you for your post! ', path: pictureData });
+        }
+        else{
+            console.log('not a cat');
+            res.status(406).json({ message: 'Are you sure this is a cat?'})
+        }
     }
     catch(err){
         console.error('Server error', err);

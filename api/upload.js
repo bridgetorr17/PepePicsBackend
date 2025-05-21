@@ -122,12 +122,12 @@ export default async function handler(req, res) {
                 }
                 
                 console.log('telling client we sent their cat')
-                res.status(200).json({ message: 'File uploaded and moved', path: pictureData });
+                res.status(200).json({ message: 'Thank you for your post! ', path: pictureData });
             }
 
             else{
                 console.log('not a cat');
-                res.status(406).json({ message: 'are you sure this is a cat?'})
+                res.status(406).json({ message: 'Are you sure this is a cat?'})
             }
         }
         catch (moveErr) {

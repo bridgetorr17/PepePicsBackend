@@ -120,6 +120,8 @@ export default async function handler(req, res) {
             pictureData['name'] = fields.name[0];
             pictureData['caption'] = fields.caption[0];
             pictureData['url'] = blob.url;
+            delete pictureData._id;
+
             console.log('Received file:', file);
             
             //upload photo and associated fields to mongodb

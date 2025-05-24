@@ -88,6 +88,7 @@ export default async function handler(req, res) {
                 
         //test model if this is a cat
         let isCat = false;
+        let noCat = false;
         try{
             let response = await axios({
                 method: "POST",
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
             const predictions = response.data.predictions;
             console.log(predictions);
 
-            if(predictions.length === 0) isCat = true;
+            if(predictions.length === 0) noCat = true;
             else{
                 for (const item of predictions){
                     if((item.class === 'cat' || item.class === 'pepe') && item.confidence > 0.5){
@@ -142,9 +143,12 @@ export default async function handler(req, res) {
             console.log('telling client we sent their cat')
             res.status(200).json({ message: 'Thank you for your post! ', path: pictureData });
         }
+        else if (noCat){
+            res.status(406).json({ message: 'We didn\'t find a cat in this photo...'});
+        }
         else{
             console.log('not a cat');
-            res.status(406).json({ message: 'Are you sure this is a cat?'})
+            res.status(406).json({ message: 'Are you sure this is a cat?'});
         }
     }
     catch(err){

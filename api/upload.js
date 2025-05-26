@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { PassThrough } from 'stream';
 import moment from 'moment';
 import axios from 'axios';
+import https from 'https';
 
 // Disable default body parser
 export const config = {
@@ -13,6 +14,10 @@ export const config = {
     bodyParser: false,
   },
 };
+
+const httpsAgent = new https.Agent({
+    rejectUnauthorized: true,
+})
 
 const client = new MongoClient(process.env.MONGO_URI);
 const pictureData = {
@@ -96,11 +101,13 @@ export default async function handler(req, res) {
                 params: {
                     api_key: process.env.CAT_RECOGNITON_KEY,
                     image: blob.url,
-                }
+                },
+                httpsAgent
             });
 
             const predictions = response.data.predictions;
             console.log(predictions);
+            console.log(predictions.length);
 
             if(predictions.length === 0) noCat = true;
             else{

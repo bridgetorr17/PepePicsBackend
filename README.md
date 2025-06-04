@@ -10,8 +10,8 @@ posted by users. If you would like to make a post, click "Post a feline friend" 
 The submission will upload your photo to vercel blob, use AI image recognition to verify that the photo contains a cat, and then add the image to the feed.
 
 ## Technologies used
-- Node.js is used for building out the API. GET and PUT requests are made from client side devices and handled effectively.
-  - PUT request
+- Node.js is used for building out the API. GET and POST requests are made from client side devices and handled effectively.
+  - POST request
     - Processed with node modules formidable and sharp
     - Photo is uploaded to the blob
     - Photo is processed with the cat recognition model
